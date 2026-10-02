@@ -32,6 +32,30 @@ def _ema(prev: float | None, new: float, alpha: float) -> float:
     return prev * (1.0 - alpha) + new * alpha
 
 
+class _SystemPowerStatus(ctypes.Structure):
+    _fields_ = [
+        ("ACLineStatus", ctypes.c_byte),
+        ("BatteryFlag", ctypes.c_byte),
+        ("BatteryLifePercent", ctypes.c_byte),
+        ("SystemStatusFlag", ctypes.c_byte),
+        ("BatteryLifeTime", wintypes.DWORD),
+        ("BatteryFullLifeTime", wintypes.DWORD),
+    ]
+
+
+def _battery_charging() -> bool | None:
+    """True when Windows says current is going into the battery."""
+    if sys.platform != "win32":
+        return None
+    status = _SystemPowerStatus()
+    if not ctypes.windll.kernel32.GetSystemPowerStatus(ctypes.byref(status)):
+        return None
+    flag = int(status.BatteryFlag) & 0xFF
+    if flag in (128, 255):
+        return None
+    return bool(flag & 8)
+
+
 @dataclass
 class Snapshot:
     cpu: float = 0.0
@@ -49,6 +73,7 @@ class Snapshot:
     gpu: float = 0.0
     gpu_ok: bool = False
     battery_secsleft: int | None = None
+    battery_charging: bool | None = None
 
     @property
     def net_bps(self) -> float:
@@ -58,11 +83,15 @@ class Snapshot:
         """full, charging, discharging, or missing."""
         if self.battery_percent is None:
             return "missing"
-        if self.battery_plugged:
-            holding = self.battery_secsleft == psutil.POWER_TIME_UNLIMITED
-            if self.battery_percent >= 99.5 or holding:
-                return "full"
+        # Windows sets "time remaining" to unlimited whenever AC is connected,
+        # including while the pack is still charging. The charging flag is
+        # the bit that actually means current is going into the battery.
+        if self.battery_charging:
             return "charging"
+        if self.battery_plugged:
+            if self.battery_charging is None and self.battery_percent < 99.5:
+                return "charging"
+            return "full"
         if self.battery_plugged is False:
             return "discharging"
         return "missing"
@@ -376,6 +405,7 @@ class Sampler:
             battery_percent=battery_percent,
             battery_plugged=battery_plugged,
             battery_secsleft=battery_secsleft,
+            battery_charging=_battery_charging(),
             net_up_bps=up_bps,
             net_down_bps=down_bps,
             net_bar=self._net_bar or 0.0,

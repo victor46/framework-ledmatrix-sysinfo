@@ -323,7 +323,10 @@ def self_test() -> None:
     assert fb[8][TICK_Y] == FILL
     assert fb[0][TICK_Y] == TRACK
 
-    charging = Snapshot(battery_percent=40, battery_plugged=True, gpu_ok=True)
+    charging = Snapshot(battery_percent=78, battery_plugged=True, battery_secsleft=-2, battery_charging=True, gpu_ok=True)
+    assert charging.battery_mode() == "charging"
+    holding = Snapshot(battery_percent=80, battery_plugged=True, battery_secsleft=-2, battery_charging=False, gpu_ok=True)
+    assert holding.battery_mode() == "full"
     frame_a = render_at(charging, 0.0, "bat", (1, 2, 0))
     frame_b = render_at(charging, 1.0, "bat", (1, 2, 0))
     assert [frame_a[x][BAT_Y + 1] for x in range(WIDTH)] != [frame_b[x][BAT_Y + 1] for x in range(WIDTH)]

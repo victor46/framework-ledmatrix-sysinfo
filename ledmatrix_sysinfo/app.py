@@ -582,6 +582,7 @@ def _demo_snapshot(now: float) -> Snapshot:
         ssd_bps=20 * 1024 * 1024,
         battery_percent=76.0,
         battery_plugged=True,
+        battery_charging=True,
         net_up_bps=90_000,
         net_down_bps=down,
         net_bar=40 + 30 * math.sin(now),
